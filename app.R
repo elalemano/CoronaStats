@@ -13,6 +13,8 @@ require(viridis)
 require(DT)
 require(sf)
 require(RColorBrewer)
+require(writexl)
+require(shinycssloaders)
 
 #### ==== GLOBAL ====####
 country_polygons <- st_read("ne_50m_admin_0_countries.shp")
@@ -64,6 +66,7 @@ ui <- dashboardPagePlus(
     #### ---- CSS ----####
     tags$head(
         tags$link(rel = "stylesheet", type = "text/css", href = "buzzwink.css"),
+        tags$meta(name = "viewport", content = "width=1600"), 
       #### ---- JS ----####
       tags$script(src = "enter_button.js")
     ),
@@ -73,15 +76,15 @@ ui <- dashboardPagePlus(
         fluidRow(
         box(
           width = 12, status = "primary",
-            leafletOutput("worldMap"),
+            leafletOutput("worldMap") %>% withSpinner(type = 6, color = '#FD2E36', size = 2.5),
            splitLayout( 
              plotlyOutput("total_cases_p"),
           plotlyOutput("total_deaths_p")
            ),
-            infoBoxOutput("infobox_date", width = 3),
-            infoBoxOutput("infobox_cases", width = 3),
-            infoBoxOutput("infobox_deaths", width = 3),
-            infoBoxOutput("infobox_deathrate", width = 3)
+            valueBoxOutput("infobox_date", width = 3),
+            valueBoxOutput("infobox_cases", width = 3),
+            valueBoxOutput("infobox_deaths", width = 3),
+            valueBoxOutput("infobox_deathrate", width = 3)
         )
       )
 
@@ -89,44 +92,44 @@ ui <- dashboardPagePlus(
         ),
       tabItem(
         tabName = "tab2",
-           fluidRow(     box(
-          width = 2, status = "primary", 
+ fluidRow(
+           box(
+          width = 2,  status = 'primary',
           uiOutput("continent_select"),
           uiOutput("country_select"),
           prettyRadioButtons(inputId = "stats_type", label = "Show stats relative to outbreak:", choices = c("Yes", "No"),
    selected = "No",inline = TRUE, status = "danger", fill = TRUE ,bigger = TRUE,  icon = icon("check"), animation = "jelly"),
    br(),
    br(),
-          actionBttn("configure", "Configure", style = "material-flat", color = "danger")
-        ),
+  actionBttn("configure", "Configure", style = "material-flat", color = "danger")
+  
+  ),
+        
 box(
-          width = 10, status = "primary", 
+          width = 10, status = "primary",          
 splitLayout(
 
 plotlyOutput("country_cases_p"),
 plotlyOutput("country_deaths_p")
-)
-
-
-)),
-box( width = 12, status = "primary",
+),
 
      splitLayout(
         plotlyOutput("country_comparison_bar_cases"),
        plotlyOutput("country_comparison_bar_deaths"),
        plotlyOutput("country_comparison_bar_rates")
        ),
-            infoBoxOutput("infobox_date_c", width = 3),
-            infoBoxOutput("infobox_cases_c", width = 3),
-            infoBoxOutput("infobox_deaths_c", width = 3),
-            infoBoxOutput("infobox_deathrate_c", width = 3)
-)
+            valueBoxOutput("infobox_date_c", width = 3),
+            valueBoxOutput("infobox_cases_c", width = 3),
+            valueBoxOutput("infobox_deaths_c", width = 3),
+            valueBoxOutput("infobox_deathrate_c", width = 3)
 
-      ), 
+))), 
       tabItem(
         tabName = "tab3",
         box( width = 12, status = "primary",
-             dataTableOutput("latest_table")
+             dataTableOutput("latest_table"),
+             br(),
+             downloadBttn("downloadData", style =  "material-flat", color = 'warning')
              )
       )
     )
@@ -139,7 +142,7 @@ box( width = 12, status = "primary",
         active = TRUE,
         
               a(actionButton('mail',"Send feedback", width = '100%', icon = shiny::icon("envelope")), href='mailto:l_busswinkel@hotmail.de'),
-      actionButton('github',"Check the code on Github",width = '100%', icon = shiny::icon("github"), onclick ="window.open('https://github.com/elalemano/ShinyCountries', '_blank')"),
+      actionButton('github',"Check the code on Github",width = '100%', icon = shiny::icon("github"), onclick ="window.open('https://github.com/elalemano/CoronaStats', '_blank')"),
         actionButton('twitter',"Follow me on Twitter",width = '100%', icon = shiny::icon("twitter"),  onclick ="window.open('https://twitter.com/LycopersiconLBB', '_blank')"), 
          actionButton('linked_in', 'Get in touch on LinkedIn',width = '100%',icon = shiny::icon("linkedin"), onclick ="window.open('https://linkedin.com/in/lukas-busswinkel', '_blank')")
         )
@@ -159,7 +162,7 @@ observe({
         tags$br(),
         tags$a("https://ourworldindata.org/coronavirus-source-data", href = "https://ourworldindata.org/coronavirus-source-data", target = "_blank"),
         tags$br(),
-        "I really hope this app can be useful to people and provide much needed information. If you have any questions or feedback, dont hesitate to let me know! My contact info you find by clicking on the ", icon("question"),
+        "I really hope this app can be useful to people and provide much needed information. If you have any questions or feedback, dont hesitate to let me know! You can find my contact info by clicking on the ", icon("question"),
         " icon in the top right corner"), btn_labels = "Thanks!",
   type = "info", closeOnClickOutside = TRUE, html = TRUE
   )
@@ -354,13 +357,23 @@ output$country_comparison_bar_rates <- renderPlotly(country_comparison_bar_rates
 #### ---- World Map ----####
 output$worldMap <- renderLeaflet({
   
-  pal <- colorQuantile(palette = "YlOrRd", domain = c(min(dat_latest()$total_cases, na.rm = T):max(dat_latest()$total_cases, na.rm = T)), n = 100)
+  pal <- colorQuantile(palette = "YlOrRd", domain = c(min(dat_latest()$total_cases, na.rm = T):max(dat_latest()$total_cases, na.rm = T)), n = 9)
   
   map_data <- country_polygons %>% 
-    left_join(dat_latest() %>% select(ISO_A3, total_cases, total_deaths), by = c("ISO_A3" = "ISO_A3"))
+    left_join(dat_latest() %>% select(ISO_A3, total_cases, total_deaths), by = c("ISO_A3" = "ISO_A3")) %>%
+    mutate(
+      FatalityRate = round((total_deaths/total_cases), 4) * 100,
+      pops = paste0('<strong>Country: </strong>',
+        NAME,
+        '<br><strong>Cases: </strong>', 
+    total_cases,
+    '<br><strong>Fatalities:</strong>: ',
+    total_deaths,
+    '<br><strong>Fatality Rate:</strong>: ',
+    FatalityRate, "%"))
   
 leaflet(data =map_data) %>%
-  addPolygons(color =  ~pal(total_cases),
+  addPolygons(color =  ~pal(total_cases), label = ~lapply(pops, HTML),
               weight = 1,
               smoothFactor = 0.5,
               opacity = 1.0,
@@ -378,11 +391,10 @@ output$latest_table <- renderDT({
       dat_latest(),
       filter = "top",
       class = "row-border stripe hover", rownames = F, style = "bootstrap",
-      extensions = c("ColReorder", "Buttons", "FixedHeader"),
+      extensions = c("ColReorder", "FixedHeader"),
       options = list(
         autoWidth = TRUE,
-        scrollX = TRUE, dom = "ltirpB", fixedHeader = TRUE,
-        buttons = c("copy", "csv", "excel", "pdf", "print"),
+        scrollX = TRUE, fixedHeader = TRUE,
         pageLength = 10,
         lengthMenu = list(c(5, 10, 15, 20, 50, -1), list("5", "10", "15", "20", "50", "All"))
       )
@@ -424,39 +436,49 @@ selectizeInput("country_select", "Select a Country:", choices = listed_choices,
 
 
 ### Tab 1 info boxes #####
-output$infobox_date <- renderInfoBox({
-  infoBox("Last Updated", value = dat_latest()$date %>% unique, color = 'blue', icon = icon('calendar'), fill = TRUE)
+output$infobox_date <- renderValueBox({
+  valueBox("Last Updated", value = dat_latest()$date %>% unique, color = 'blue', icon = icon('calendar'))
 })
 
-output$infobox_cases <- renderInfoBox({
-  infoBox("Total Cases", value = dat_latest()$total_cases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'), fill = TRUE)
+output$infobox_cases <- renderValueBox({
+  valueBox("Total Cases", value = dat_latest()$total_cases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'))
 })
 
-output$infobox_deaths <- renderInfoBox({
-  infoBox("Total Deaths", value = dat_latest()$total_deaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'), fill = TRUE)
+output$infobox_deaths <- renderValueBox({
+  valueBox("Total Deaths", value = dat_latest()$total_deaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'))
 })
 
-output$infobox_deathrate <- renderInfoBox({
-  infoBox("Fatality rate", value = round((dat_latest()$total_deaths %>% sum(., na.rm = T)) / (dat_latest()$total_cases %>% sum(., na.rm = T)), 4) * 100, color = 'yellow', icon = icon('percent'), fill = TRUE)
+output$infobox_deathrate <- renderValueBox({
+  valueBox("Fatality rate", value = round((dat_latest()$total_deaths %>% sum(., na.rm = T)) / (dat_latest()$total_cases %>% sum(., na.rm = T)), 4) * 100, color = 'yellow', icon = icon('percent'))
 })
 
 ### Tab 2 info boxes #####
-output$infobox_date_c <- renderInfoBox({
-  infoBox("Last Updated", value = dat_totals_country()$date %>% unique, color = 'blue', icon = icon('calendar'), fill = TRUE)
+output$infobox_date_c <- renderValueBox({
+  valueBox("Last Updated", value = dat_totals_country()$date %>% unique, color = 'blue', icon = icon('calendar'))
 })
 
-output$infobox_cases_c <- renderInfoBox({
-  infoBox("Total Cases", value = dat_totals_country()$TotalCases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'), fill = TRUE)
+output$infobox_cases_c <- renderValueBox({
+  valueBox("Total Cases", value = dat_totals_country()$TotalCases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'))
 })
 
-output$infobox_deaths_c <- renderInfoBox({
-  infoBox("Total Deaths", value = dat_totals_country()$TotalDeaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'), fill = TRUE)
+output$infobox_deaths_c <- renderValueBox({
+  valueBox("Total Deaths", value = dat_totals_country()$TotalDeaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'))
 })
 
-output$infobox_deathrate_c <- renderInfoBox({
-  infoBox("Fatality rate", value = round((dat_totals_country()$TotalDeaths %>% sum(., na.rm = T)) / (dat_totals_country()$TotalCases %>% sum(., na.rm = T)), 4) * 100, color = 'yellow', icon = icon('percent'), fill = TRUE)
+output$infobox_deathrate_c <- renderValueBox({
+  valueBox("Fatality rate", value = round((dat_totals_country()$TotalDeaths %>% sum(., na.rm = T)) / (dat_totals_country()$TotalCases %>% sum(., na.rm = T)), 4) * 100, color = 'yellow', icon = icon('percent'))
 })
+
+
+###==== Downloads ====####
+output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("Corona_Stats", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write_xlsx(pull_data(), file)
+    }
+  )
 }
-
 #### ==== END ====####
 shinyApp(ui, server)

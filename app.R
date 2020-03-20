@@ -16,8 +16,22 @@ require(RColorBrewer)
 require(writexl)
 require(shinycssloaders)
 
+
 #### ==== GLOBAL ====####
-country_polygons <- st_read("ne_50m_admin_0_countries.shp")
+source("utils/st_centroid_within_poly.R")
+
+## Read the polygons
+country_polygons <- st_read("dat/ne_50m_admin_0_countries.shp") %>%
+  filter(
+    !(NOTE_ADM0 %in% c("U.K. crown dependency")) &   # Filter out some smaller, non sovereign states
+      TYPE != "Dependency"
+    )
+### Create centroids to visualize markers 
+country_polygons <-country_polygons  %>% 
+  mutate(lon = map_dbl(geometry, ~st_centroid_within_poly(.x)[[1]]),
+         lat = map_dbl(geometry, ~st_centroid_within_poly(.x)[[2]]))
+
+### Split off the country information 
 countries <- country_polygons %>% as.data.frame %>% 
   select(NAME, ISO_A3, POP_EST, GDP_MD_EST, INCOME_GRP, CONTINENT, REGION_UN,SUBREGION, REGION_WB) %>%
   mutate(
@@ -28,11 +42,11 @@ countries <- country_polygons %>% as.data.frame %>%
                   "Dem. Rep. Congo" = "Democratic Republic of Congo",
                    "Dominican Rep." = "Dominican Republic",
                   "United States of America" = "United States",
-                  "St-Martin" = "Saint Martin (French part)",
-                  
-                  
+                  "St-Martin" = "Saint Martin (French part)"
                   )
-  )
+    ) 
+
+
 
 #### ==== UI ====####
 ui <- dashboardPagePlus(
@@ -175,7 +189,7 @@ pull_data  <- reactive({
 ####---- Base country info ----####
 
 ####---- Corona data ----####
-dat_all <- read_csv("http://cowid.netlify.com/data/full_data.csv") %>%
+dat_all <- read_csv("https://covid.ourworldindata.org/data/ecdc/full_data.csv") %>%
   left_join(countries, by = c("location" = "NAME")) %>% filter(!is.na(CONTINENT))
 
 return(dat_all)
@@ -235,7 +249,7 @@ output$total_deaths_p <- renderPlotly({
   
   total_deaths <- dat_totals_global_time()
   
-  plot_ly(data= total_deaths, x = ~date, y = ~TotalDeaths, type = 'bar',marker = list(color = brewer.pal(8, "Accent")[7])) %>%
+  plot_ly(data= total_deaths, x = ~date, y = ~TotalDeaths, type = 'bar',marker = list(color = brewer.pal(8, "Set2")[1])) %>%
     layout(
       xaxis = list(title = "Date",  tickangle = 315),
       yaxis = list(title = "Fatalities")
@@ -247,7 +261,7 @@ output$total_cases_p <- renderPlotly({
   
   total_cases <- dat_totals_global_time()
   
-  plot_ly(data= total_cases, x = ~date, y = ~TotalCases, type = 'bar', marker = list(color = brewer.pal(8, "Accent")[5])) %>%
+  plot_ly(data= total_cases, x = ~date, y = ~TotalCases, type = 'bar', marker = list(color = brewer.pal(8, "Set2")[6])) %>%
     layout(
       xaxis = list(title = "Date",  tickangle = 315),
       yaxis = list(title = "Infections")
@@ -263,7 +277,7 @@ country_trends_graph_cases <- eventReactive(input$configure,{
     if(input$stats_type == "Yes"){
       total_cases <-  filter_data_country_100()
     plot_ly(data= total_cases, x = ~Day, y = ~total_cases, type = 'scatter', mode = 'lines+markers', color = ~location, 
-            colors = brewer.pal(length(unique(total_cases$location)), "Accent")) %>% 
+            colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total cases by day after 100 infections",
       xaxis = list(title = 'Day', tickangle = 315),
@@ -273,7 +287,7 @@ country_trends_graph_cases <- eventReactive(input$configure,{
       total_cases <-  filter_data_country()
       
     plot_ly(data= total_cases, x = ~date, y = ~total_cases, type = 'scatter', mode = 'lines+markers', color = ~location, 
-            colors = brewer.pal(length(unique(total_cases$location)), "Accent")) %>% 
+            colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total cases by date",
       xaxis = list(title = 'Date', tickangle = 315),
@@ -291,7 +305,7 @@ country_trends_graph_deaths <- eventReactive(input$configure,{
     if(input$stats_type == "Yes"){
       total_cases <-  filter_data_country_100()
     plot_ly(data= total_cases, x = ~Day, y = ~total_deaths, type = 'scatter', mode = 'lines+markers', color = ~location, 
-            colors = brewer.pal(length(unique(total_cases$location)), "Accent")) %>% 
+            colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total fatalities by day after 100 infections",
       xaxis = list(title = 'Day', tickangle = 315),
@@ -301,7 +315,7 @@ country_trends_graph_deaths <- eventReactive(input$configure,{
       total_cases <-  filter_data_country()
       
     plot_ly(data= total_cases, x = ~date, y = ~total_deaths, type = 'scatter', mode = 'lines+markers', color = ~location, 
-            colors = brewer.pal(length(unique(total_cases$location)), "Accent")) %>% 
+            colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total fatalities by date",
       xaxis = list(title = 'Date', tickangle = 315),
@@ -318,7 +332,7 @@ country_trends_graph_deaths()
 country_comparison_bar_deaths_f <- eventReactive(input$configure,{
   plot_data <- dat_totals_country()
   plot_ly(data = plot_data, x = ~TotalDeaths, y = ~location, type = 'bar', color = ~location, orientation = 'h',
-         colors = brewer.pal(length(unique(plot_data$location)), "Accent")) %>% 
+         colors = brewer.pal(length(unique(plot_data$location)), "Set2")) %>% 
           layout(
             title = "Number of Fatalities",
             yaxis = list( title = ""),
@@ -330,7 +344,7 @@ country_comparison_bar_cases_f <- eventReactive(input$configure,{
 
   plot_data <- dat_totals_country()
   plot_ly(data = plot_data, x = ~TotalCases, y = ~location, type = 'bar', color = ~location, orientation = 'h',
-         colors = brewer.pal(length(unique(plot_data$location)), "Accent")) %>% 
+         colors = brewer.pal(length(unique(plot_data$location)), "Set2")) %>% 
           layout(
             yaxis = list(title = ""),
             title = "Number of infections",
@@ -342,7 +356,7 @@ country_comparison_bar_rates_f <- eventReactive(input$configure,{
 
   plot_data <- dat_totals_country() %>% mutate(FatalityRate = (TotalDeaths/TotalCases))
   plot_ly(data = plot_data, x = ~FatalityRate, y = ~location, type = 'bar', color = ~location, orientation = 'h',
-         colors = brewer.pal(length(unique(plot_data$location)), "Accent")) %>% 
+         colors = brewer.pal(length(unique(plot_data$location)), "Set2")) %>% 
           layout(
             title = "Fatality Rate (%)",
             xaxis = list(tickformat = "%", title = ""),
@@ -357,28 +371,48 @@ output$country_comparison_bar_rates <- renderPlotly(country_comparison_bar_rates
 #### ---- World Map ----####
 output$worldMap <- renderLeaflet({
   
-  pal <- colorQuantile(palette = "YlOrRd", domain = c(min(dat_latest()$total_cases, na.rm = T):max(dat_latest()$total_cases, na.rm = T)), n = 9)
-  
   map_data <- country_polygons %>% 
     left_join(dat_latest() %>% select(ISO_A3, total_cases, total_deaths), by = c("ISO_A3" = "ISO_A3")) %>%
     mutate(
       FatalityRate = round((total_deaths/total_cases), 4) * 100,
       pops = paste0('<strong>Country: </strong>',
         NAME,
-        '<br><strong>Cases: </strong>', 
+    '<br><strong>Cases: </strong>', 
     total_cases,
-    '<br><strong>Fatalities:</strong>: ',
+    '<br><strong>Fatalities: </strong>',
     total_deaths,
-    '<br><strong>Fatality Rate:</strong>: ',
+    '<br><strong>Fatality Rate: </strong>',
     FatalityRate, "%"))
   
+  ### Palletes ####
+  pal_cases  <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$total_cases, na.rm = T):max(map_data$total_cases, na.rm = T)))
+  pal_deaths <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$total_deaths, na.rm = T):max(map_data$total_deaths, na.rm = T)))
+  pal_rate   <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$FatalityRate, na.rm = T):max(map_data$FatalityRate, na.rm = T)))
+  
+  
 leaflet(data =map_data) %>%
-  addPolygons(color =  ~pal(total_cases), label = ~lapply(pops, HTML),
-              weight = 1,
-              smoothFactor = 0.5,
-              opacity = 1.0,
-              fillOpacity = 0.5,
+  addPolygons(color =  ~pal_cases(total_cases), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
+              opacity = 1.0,fillOpacity = 0.5,group = "Total Cases",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
+  addCircles(
+    lng =~ lon, lat = ~lat,radius = ~total_cases*5,color = "#68091b", 
+    label = ~total_cases, stroke = FALSE, fillOpacity = 0.5, group = "Total Cases"
+  ) %>%
+    addPolygons(color =  ~pal_deaths(total_deaths), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
+              opacity = 1.0,fillOpacity = 0.5,group = "Total Fatalities",
+              highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
+    addCircles(
+    lng =~ lon, lat = ~lat,radius = ~total_deaths*100,color = "#68091b", 
+    label = ~total_deaths, stroke = FALSE, fillOpacity = 0.5, group = "Total Fatalities"
+  ) %>%
+      addPolygons(color =  ~pal_rate(FatalityRate), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
+              opacity = 1.0,fillOpacity = 0.5,group = "Fatality Rate",
+              highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
+      addCircles(
+    lng =~ lon, lat = ~lat,radius = ~total_deaths*100,color = "#68091b", 
+    label = ~FatalityRate, stroke = FALSE, fillOpacity = 0.5, group = "Fatality Rate"
+  ) %>%
+    addLayersControl( baseGroups = c("Total Cases", "Total Fatalities", "Fatality Rate"),  options = layersControlOptions(collapsed = FALSE)) %>% 
   setView(8.404363, 39.013003, 3)
 
 })

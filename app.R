@@ -507,7 +507,7 @@ output$infobox_deathrate_c <- renderValueBox({
 ###==== Downloads ====####
 output$downloadData <- downloadHandler(
     filename = function() {
-      paste("Corona_Stats", Sys.Date(), ".csv", sep="")
+      paste("Corona_Stats", Sys.Date(), ".xlsx", sep="")
     },
     content = function(file) {
       write_xlsx(pull_data(), file)

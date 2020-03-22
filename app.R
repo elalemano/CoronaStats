@@ -118,7 +118,7 @@ ui <- dashboardPagePlus(
           width = 2,  status = 'primary',
           uiOutput("continent_select"),
           uiOutput("country_select"),
-          prettyRadioButtons(inputId = "stats_type", label = "Show stats relative to outbreak:", choices = c("Yes", "No"),
+          prettyRadioButtons(inputId = "stats_type", label = "Relative to start of outbreak:", choices = c("Yes", "No"),
    selected = "No",inline = TRUE, status = "danger", fill = TRUE ,bigger = TRUE,  icon = icon("check"), animation = "jelly"),
    br(),
    br(),
@@ -132,9 +132,10 @@ splitLayout(
 
 plotlyOutput("country_cases_p"),
 plotlyOutput("country_deaths_p")
-),
+)),
 
-     splitLayout(
+  box(  width = 12, status = "primary",  
+    splitLayout(
         plotlyOutput("country_comparison_bar_cases"),
        plotlyOutput("country_comparison_bar_deaths"),
        plotlyOutput("country_comparison_bar_rates")
@@ -293,7 +294,7 @@ country_trends_graph_cases <- eventReactive(input$configure,{
             colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total cases by day after 100 infections",
-      xaxis = list(title = 'Day', tickangle = 315),
+      xaxis = list(title = 'Day after 100 cases', tickangle = 315),
       yaxis = list(title = "Number of infections"))
       
   } else {
@@ -321,7 +322,7 @@ country_trends_graph_deaths <- eventReactive(input$configure,{
             colors = brewer.pal(length(unique(total_cases$location)), "Set2")) %>% 
     layout(
       title = "Total fatalities by day after 100 infections",
-      xaxis = list(title = 'Day', tickangle = 315),
+      xaxis = list(title = 'Day after 100 cases', tickangle = 315),
       yaxis = list(title = "Number of fatalities"))
       
   } else {

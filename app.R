@@ -25,15 +25,21 @@ country_polygons <- st_read("dat/ne_50m_admin_0_countries.shp") %>%
   filter(
     !(NOTE_ADM0 %in% c("U.K. crown dependency")) &   # Filter out some smaller, non sovereign states
       TYPE != "Dependency"
-    )
+    ) %>% 
+  mutate_if(is.factor, as.character) %>%
+   mutate(   ISO_A3 = case_when(
+      ISO_A3 == "-99" ~ ADM0_A3,
+      TRUE ~ ISO_A3
+      )
+   )
+
 ### Create centroids to visualize markers 
 country_polygons <-country_polygons  %>% 
   mutate(lon = map_dbl(geometry, ~st_centroid_within_poly(.x)[[1]]),
          lat = map_dbl(geometry, ~st_centroid_within_poly(.x)[[2]]))
 
 ### Split off the country information 
-countries <- country_polygons %>% as.data.frame %>% 
-  select(NAME, ISO_A3, POP_EST, GDP_MD_EST, INCOME_GRP, CONTINENT, REGION_UN,SUBREGION, REGION_WB) %>%
+countries <- country_polygons %>% as.data.frame %>%
   mutate(
     NAME = recode(NAME, 
                   "Bosnia and Herz." = "Bosnia and Herzegovina",
@@ -44,7 +50,8 @@ countries <- country_polygons %>% as.data.frame %>%
                   "United States of America" = "United States",
                   "St-Martin" = "Saint Martin (French part)"
                   )
-    ) 
+    )  %>% 
+  select(NAME, ISO_A3, POP_EST, GDP_MD_EST, INCOME_GRP, CONTINENT, REGION_UN,SUBREGION, REGION_WB) 
 
 
 
@@ -82,7 +89,7 @@ ui <- dashboardPagePlus(
         tags$link(rel = "stylesheet", type = "text/css", href = "buzzwink.css"),
         tags$meta(name = "viewport", content = "width=1600"), 
       #### ---- JS ----####
-      tags$script(src = "enter_button.js")
+   #   tags$script(src = "enter_button.js")
     ),
     tabItems(
       tabItem(
@@ -143,22 +150,25 @@ plotlyOutput("country_deaths_p")
         box( width = 12, status = "primary",
              dataTableOutput("latest_table"),
              br(),
-             downloadBttn("downloadData", style =  "material-flat", color = 'warning')
+             downloadBttn("downloadData", style =  "material-flat", color = 'danger'
+                            )
              )
       )
     )
   ),
   rightSidebar(
-    background = "light",
     rightSidebarTabContent(
         id = 1,
         icon = "info",
         active = TRUE,
         
-              a(actionButton('mail',"Send feedback", width = '100%', icon = shiny::icon("envelope")), href='mailto:l_busswinkel@hotmail.de'),
-      actionButton('github',"Check the code on Github",width = '100%', icon = shiny::icon("github"), onclick ="window.open('https://github.com/elalemano/CoronaStats', '_blank')"),
-        actionButton('twitter',"Follow me on Twitter",width = '100%', icon = shiny::icon("twitter"),  onclick ="window.open('https://twitter.com/LycopersiconLBB', '_blank')"), 
-         actionButton('linked_in', 'Get in touch on LinkedIn',width = '100%',icon = shiny::icon("linkedin"), onclick ="window.open('https://linkedin.com/in/lukas-busswinkel', '_blank')")
+      a(actionBttn('mail',"Send feedback", block = T, icon = shiny::icon("envelope"), color = "danger",style = 'material-flat'), href='mailto:l_busswinkel@hotmail.de', target = '_blank'),
+      br(),
+      a(actionBttn('github',"Check the code on Github",block = T, icon = shiny::icon("github"),color = "danger", style = 'material-flat'), href ="https://github.com/elalemano/CoronaStats", target = '_blank'),
+      br(),
+      a(actionBttn('twitter',"Follow me on Twitter",block = T, icon = shiny::icon("twitter"), color = "danger",style = 'material-flat'),  href ="https://twitter.com/LycopersiconLBB", target =  '_blank'), 
+      br(),
+      a(actionBttn('linked_in', 'Get in touch on LinkedIn',block = T,icon = shiny::icon("linkedin"), color = "danger",style = 'material-flat'), href ="https://linkedin.com/in/lukas-busswinkel", target =  '_blank')
         )
   ),
   dashboardFooter(left_text = "Created March 2020 by Lukas Busswinkel", right_text = "v0.1")
@@ -177,7 +187,10 @@ observe({
         tags$a("https://ourworldindata.org/coronavirus-source-data", href = "https://ourworldindata.org/coronavirus-source-data", target = "_blank"),
         tags$br(),
         "I really hope this app can be useful to people and provide much needed information. If you have any questions or feedback, dont hesitate to let me know! You can find my contact info by clicking on the ", icon("question"),
-        " icon in the top right corner"), btn_labels = "Thanks!",
+        " icon in the top right corner",
+        tags$br(),
+        "Hint: all graphs are interactive, and snapshots can be downloaded"
+        ), btn_labels = "Thanks!",
   type = "info", closeOnClickOutside = TRUE, html = TRUE
   )
 })
@@ -374,7 +387,8 @@ output$worldMap <- renderLeaflet({
   map_data <- country_polygons %>% 
     left_join(dat_latest() %>% select(ISO_A3, total_cases, total_deaths), by = c("ISO_A3" = "ISO_A3")) %>%
     mutate(
-      FatalityRate = round((total_deaths/total_cases), 4) * 100,
+      FatalityRate =round((total_deaths/total_cases), 4) * 100,
+      FatalityRate = ifelse(total_deaths >= 10 & total_cases >= 500, FatalityRate, NA),
       pops = paste0('<strong>Country: </strong>',
         NAME,
     '<br><strong>Cases: </strong>', 
@@ -383,36 +397,37 @@ output$worldMap <- renderLeaflet({
     total_deaths,
     '<br><strong>Fatality Rate: </strong>',
     FatalityRate, "%"))
-  
-  ### Palletes ####
-  pal_cases  <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$total_cases, na.rm = T):max(map_data$total_cases, na.rm = T)))
-  pal_deaths <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$total_deaths, na.rm = T):max(map_data$total_deaths, na.rm = T)))
-  pal_rate   <- colorNumeric(palette = "YlOrRd", domain = c(min(map_data$FatalityRate, na.rm = T):max(map_data$FatalityRate, na.rm = T)))
-  
-  
+   
+  ### Palettes ####
+  pal_cases  <- colorBin(palette = "YlOrRd", domain = map_data$total_cases, bins = 9)
+  pal_deaths <- colorBin(palette = "YlOrRd", domain = map_data$total_deaths, bins = 9)
+  pal_rate   <- colorBin(palette = "YlOrRd", domain = map_data$FatalityRate, bins = 9)
+
+
 leaflet(data =map_data) %>%
+  #Cases
   addPolygons(color =  ~pal_cases(total_cases), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
               opacity = 1.0,fillOpacity = 0.5,group = "Total Cases",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
   addCircles(
     lng =~ lon, lat = ~lat,radius = ~total_cases*5,color = "#68091b", 
-    label = ~total_cases, stroke = FALSE, fillOpacity = 0.5, group = "Total Cases"
+    label = NULL, stroke = FALSE, fillOpacity = 0.5, group = "Total Cases"
   ) %>%
+  #Fatalities
     addPolygons(color =  ~pal_deaths(total_deaths), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
               opacity = 1.0,fillOpacity = 0.5,group = "Total Fatalities",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
-    addCircles(
-    lng =~ lon, lat = ~lat,radius = ~total_deaths*100,color = "#68091b", 
-    label = ~total_deaths, stroke = FALSE, fillOpacity = 0.5, group = "Total Fatalities"
+    addCircles(lng =~ lon, lat = ~lat,radius = ~total_deaths*90,color= "#68091b", 
+    label = NULL, stroke = FALSE, fillOpacity = 0.5, group = "Total Fatalities"
   ) %>%
+  # Fatality Rate
       addPolygons(color =  ~pal_rate(FatalityRate), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
-              opacity = 1.0,fillOpacity = 0.5,group = "Fatality Rate",
+              opacity = 1.0,fillOpacity = 0.5,group = "Fatality Rate (n>=500)",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
-      addCircles(
-    lng =~ lon, lat = ~lat,radius = ~total_deaths*100,color = "#68091b", 
-    label = ~FatalityRate, stroke = FALSE, fillOpacity = 0.5, group = "Fatality Rate"
+      addCircles( lng =~ lon, lat = ~lat,radius = ~FatalityRate*15000,color = "#68091b", 
+              label = NULL, stroke = FALSE, fillOpacity = 0.5, group = "Fatality Rate (n>=500)"
   ) %>%
-    addLayersControl( baseGroups = c("Total Cases", "Total Fatalities", "Fatality Rate"),  options = layersControlOptions(collapsed = FALSE)) %>% 
+  addLayersControl( baseGroups = c("Total Cases", "Total Fatalities", "Fatality Rate (n>=500)"),  options = layersControlOptions(collapsed = FALSE)) %>% 
   setView(8.404363, 39.013003, 3)
 
 })
@@ -475,11 +490,11 @@ output$infobox_date <- renderValueBox({
 })
 
 output$infobox_cases <- renderValueBox({
-  valueBox("Total Cases", value = dat_latest()$total_cases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'))
+  valueBox("Total Cases", value = dat_latest()$total_cases %>% sum(., na.rm = T) %>% prettyNum(big.mark = ","), color = 'orange', icon = icon('hashtag'))
 })
 
 output$infobox_deaths <- renderValueBox({
-  valueBox("Total Deaths", value = dat_latest()$total_deaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'))
+  valueBox("Total Deaths", value = dat_latest()$total_deaths %>% sum(., na.rm = T) %>% prettyNum(big.mark = ","), color = 'red', icon = icon('cross'))
 })
 
 output$infobox_deathrate <- renderValueBox({
@@ -492,11 +507,11 @@ output$infobox_date_c <- renderValueBox({
 })
 
 output$infobox_cases_c <- renderValueBox({
-  valueBox("Total Cases", value = dat_totals_country()$TotalCases %>% sum(., na.rm = T), color = 'orange', icon = icon('hashtag'))
+  valueBox("Total Cases", value = dat_totals_country()$TotalCases %>% sum(., na.rm = T) %>% prettyNum(big.mark = ","), color = 'orange', icon = icon('hashtag'))
 })
 
 output$infobox_deaths_c <- renderValueBox({
-  valueBox("Total Deaths", value = dat_totals_country()$TotalDeaths %>% sum(., na.rm = T), color = 'red', icon = icon('cross'))
+  valueBox("Total Deaths", value = dat_totals_country()$TotalDeaths %>% sum(., na.rm = T) %>% prettyNum(big.mark = ","), color = 'red', icon = icon('cross'))
 })
 
 output$infobox_deathrate_c <- renderValueBox({

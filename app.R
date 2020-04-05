@@ -411,14 +411,14 @@ leaflet(data =map_data) %>%
               opacity = 1.0,fillOpacity = 0.5,group = "Total Cases",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
   addCircles(
-    lng =~ lon, lat = ~lat,radius = ~total_cases*5,color = "#68091b", 
+    lng =~ lon, lat = ~lat,radius = ~total_cases*3,color = "#68091b", 
     label = NULL, stroke = FALSE, fillOpacity = 0.5, group = "Total Cases"
   ) %>%
   #Fatalities
     addPolygons(color =  ~pal_deaths(total_deaths), label = ~lapply(pops, HTML), weight = 1,smoothFactor = 0.5,
               opacity = 1.0,fillOpacity = 0.5,group = "Total Fatalities",
               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE))  %>%
-    addCircles(lng =~ lon, lat = ~lat,radius = ~total_deaths*90,color= "#68091b", 
+    addCircles(lng =~ lon, lat = ~lat,radius = ~total_deaths*30, color= "#68091b", 
     label = NULL, stroke = FALSE, fillOpacity = 0.5, group = "Total Fatalities"
   ) %>%
   # Fatality Rate
